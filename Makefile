@@ -16,10 +16,10 @@ goenv:
 	@echo ++++++++++++++++++++++++++
 	@echo
 
-test: c-share luajit
+test: c-share test-luajit
 
 c-share:
 	go build -o lib/libzstd-$(GOOS_GOARCH).so -buildmode=c-shared zstd/zstd.go
 
-luajit:
+test-luajit:
 	luajit luajit/zstd.lua

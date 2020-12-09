@@ -1,5 +1,14 @@
 local ffi = require("ffi")
-local zstd = ffi.load("lib/libzstd-darwin_amd64.so")
+local encoding = require("luajit/base64")
+
+io.write(string.format("Running os=%s, arch=%s\n", jit.os, jit.arch))
+
+local zstd
+if jit.os == 'OSX' then
+    zstd = ffi.load("lib/libzstd-darwin_amd64.so")
+elseif jit.os == 'Linux' then
+    zstd = ffi.load("lib/libzstd-linux_amd64.so")
+end
 
 ffi.cdef([[
 typedef struct { const char *p; ptrdiff_t n; } _GoString_;
@@ -28,10 +37,7 @@ typedef struct { void *t; void *v; } GoInterface;
 typedef struct { void *data; GoInt len; GoInt cap; } GoSlice;
 
 /* Return type for Compress */
-struct GoCompressResult {
-	void* data;
-	GoInt size;
-};
+typedef struct GoCompressResult { void* data; GoInt size; } GoCompressResult;
 
 extern void EnableDebug();
 extern void DisableDebug();
@@ -46,7 +52,7 @@ extern char* DecompressWithDict(void* ptr, int size, GoString dict);
 
 -- define go types
 local goStringType = ffi.metatype("GoString", {})
-local goSliceType = ffi.metatype("GoSlice", {})
+local goCompressResultType = ffi.metatype("GoCompressResult", {})
 
 -- init dict
 local name = "testing"
@@ -59,35 +65,45 @@ zstd.EnableDebug()
 zstd.AddDict(dictName, dictFilename)
 
 -- compress/decompress without dict
+io.write("\n-- compress/decompress without dict\n")
 local actual = "Hello, world! This is a golang zstd binding for c with luajit."
 
+-- compress with GoString
 local compressInput = goStringType(actual, #actual)
-
 local compressOutput = zstd.Compress(compressInput)
-io.write(string.format("Compressed without dict => type=%s, size=%d\n", ffi.typeof(compressOutput), ffi.sizeof(compressOutput)))
+io.write(string.format("Compressed without dict output => lua type=%s, ffi type=%s, ffi size=%d\n", type(compressOutput), ffi.typeof(compressOutput), ffi.sizeof(compressOutput)))
 
 local compressResult = ffi.new("struct GoCompressResult", compressOutput)
-io.write(string.format("Compressed without dict => type=%s, size=%d\n", ffi.typeof(compressResult), ffi.sizeof(compressResult)))
-io.write(string.format("Compressed without dict => data=%s, size=%d\n", ffi.typeof(compressResult.data), tonumber(compressResult.size)))
+io.write(string.format("Compressed without dict result => lua type=%s, ffi type=%s, size=%d\n", type(compressResult.data), ffi.typeof(compressResult.data), tonumber(compressResult.size)))
 
+-- decompress with char* and int
 local decompressOutput = zstd.Decompress(compressResult.data, compressResult.size)
-
-io.write(string.format("Decompressed without dict => %s\n", ffi.string(decompressOutput)))
+io.write(string.format("Decompressed without dict output => %s\n", ffi.string(decompressOutput)))
 assert(ffi.string(decompressOutput) == actual)
 
 -- compress/decompress with dict
-local actualDict = "Hello, world! This is a golang zstd binding for c with luajit."
+io.write("\n-- compress/decompress with dict\n")
+local dictActual = "Hello, world! This is a golang zstd binding for c with luajit and dict."
 
-local compressDictInput = goStringType(actualDict, #actualDict)
+-- compress with GoString by dict
+local dictCompressInput = goStringType(dictActual, #dictActual)
+local dictCompressOutput = zstd.CompressWithDict(dictCompressInput, dictName)
+io.write(string.format("Compressed with dict output => lua type=%s, ffi type=%s, ffi size=%d\n", type(dictCompressOutput), ffi.typeof(dictCompressOutput), ffi.sizeof(dictCompressOutput)))
 
-local compressDictOutput = zstd.CompressWithDict(compressDictInput, dictName)
-io.write(string.format("Compressed with dict => type=%s, size=%d\n", ffi.typeof(compressDictOutput), ffi.sizeof(compressDictOutput)))
+local dictCompressResult = ffi.new("struct GoCompressResult", dictCompressOutput)
+io.write(string.format("Compressed with dict result => lua type=%s, ffi type=%s, size=%d\n", type(dictCompressResult.data), ffi.typeof(dictCompressResult.data), tonumber(dictCompressResult.size)))
 
-local compressDictResult = ffi.new("struct GoCompressResult", compressDictOutput)
-io.write(string.format("Compressed with dict => type=%s, size=%d\n", ffi.typeof(compressDictResult), ffi.sizeof(compressDictResult)))
-io.write(string.format("Compressed with dict => data=%s, size=%d\n", ffi.typeof(compressDictResult.data), tonumber(compressDictResult.size)))
+-- decompress with char* and int by dict
+local dedictCompressOutput = zstd.DecompressWithDict(dictCompressResult.data, dictCompressResult.size, dictName)
+io.write(string.format("Decompressed with dict output => %s\n", ffi.string(dedictCompressOutput)))
+assert(ffi.string(dedictCompressOutput) == dictActual)
 
-local decompressDictOutput = zstd.DecompressWithDict(compressDictResult.data, compressDictResult.size, dictName)
+-- for ngx
+io.write("\n-- for ngx\n")
+local ngData = from_base64("KLUv/SA+8QEASGVsbG8sIHdvcmxkISBUaGlzIGlzIGEgZ29sYW5nIHpzdGQgYmluZGluZyBmb3IgYyB3aXRoIGx1YWppdC4=")
+io.write(string.format("ngdata => data=%s, size=%d\n", type(ngData), #ngData))
 
-io.write(string.format("Decompressed with dict => %s\n", ffi.string(decompressDictOutput)))
-assert(ffi.string(decompressDictOutput) == actualDict)
+local ngResult = goCompressResultType(ffi.new("char[?]", #ngData, ngData), #ngData)
+
+local ngOutput = zstd.Decompress(ngResult.data, ngResult.size)
+io.write(string.format("Decompressed without dict => %s\n", ffi.string(ngOutput)))
