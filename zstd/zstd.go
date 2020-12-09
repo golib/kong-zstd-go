@@ -99,21 +99,23 @@ func ReleaseDict() {
 }
 
 //export Compress
-func Compress(src string) (*C.char, int) {
+func Compress(src string) (unsafe.Pointer, int) {
 	cdata := gozstd.Compress(nil, []byte(src))
 	if debug {
-		log.Printf("[DEBUG] zstd.Compress(nil, %s): data=%+v, size=%d", src, cdata, len(cdata))
+		log.Printf("[DEBUG] zstd.Compress(nil, %s): data=%s, size=%d", src, base64.StdEncoding.EncodeToString(cdata), len(cdata))
 	}
 
 	n := len(cdata)
-	cs := C.CString(string(cdata))
-	C.free(unsafe.Pointer(cs))
+	cb := C.CBytes(cdata)
+	//C.free(cb)
 
-	return cs, n
+	return cb, n
 }
 
 //export Decompress
-func Decompress(dst []byte) *C.char {
+func Decompress(ptr unsafe.Pointer, size C.int) *C.char {
+	dst := C.GoBytes(ptr, size)
+
 	ddata, err := gozstd.Decompress(nil, dst)
 	if err != nil {
 		log.Printf("zstd.Decompress(nil, %+v): %+v", dst, err)
@@ -121,19 +123,19 @@ func Decompress(dst []byte) *C.char {
 		return C.CString("")
 	}
 	if debug {
-		log.Printf("[DEBUG] zstd.Decompress(nil, %+v): data=%+v, size=%d", dst, ddata, len(ddata))
+		log.Printf("[DEBUG] zstd.Decompress(nil, %+v): data=%s, size=%d", dst, ddata, len(ddata))
 	}
 
 	ds := C.CString(string(ddata))
-	C.free(unsafe.Pointer(ds))
+	//C.free(unsafe.Pointer(ds))
 
 	return ds
 }
 
 //export CompressWithDict
-func CompressWithDict(src, dict string) (*C.char, int) {
+func CompressWithDict(src, dict string) (unsafe.Pointer, int) {
 	n := -1
-	empty := C.CString("")
+	empty := C.CBytes([]byte(""))
 
 	value, ok := cdictStore.Load(dict)
 	if !ok {
@@ -151,18 +153,20 @@ func CompressWithDict(src, dict string) (*C.char, int) {
 
 	cdata := gozstd.CompressDict(nil, []byte(src), cdict)
 	if debug {
-		log.Printf("[DEBUG] zstd.CompressDict(nil, %s, %s): data=%+v, size=%d", src, dict, cdata, len(cdata))
+		log.Printf("[DEBUG] zstd.CompressDict(nil, %s, %s): data=%+v, size=%d", src, dict, base64.StdEncoding.EncodeToString(cdata), len(cdata))
 	}
 
 	n = len(cdata)
-	cs := C.CString(string(cdata))
-	C.free(unsafe.Pointer(cs))
+	cb := C.CBytes(cdata)
+	//C.free(cb)
 
-	return cs, n
+	return cb, n
 }
 
 //export DecompressWithDict
-func DecompressWithDict(dst []byte, dict string) *C.char {
+func DecompressWithDict(ptr unsafe.Pointer, size C.int, dict string) *C.char {
+	dst := C.GoBytes(ptr, size)
+
 	value, ok := ddictStore.Load(dict)
 	if !ok {
 		log.Printf("zstd.DecompressDict(%s, %s): missing dict, please init first.", dst, dict)
@@ -185,11 +189,11 @@ func DecompressWithDict(dst []byte, dict string) *C.char {
 	}
 
 	if debug {
-		log.Printf("[DEBUG] zstd.DecompressDict(nil, %+v, %s): data=%+v, size=%d", dst, dict, data, len(data))
+		log.Printf("[DEBUG] zstd.DecompressDict(nil, %+v, %s): data=%s, size=%d", dst, dict, data, len(data))
 	}
 
 	ds := C.CString(string(data))
-	C.free(unsafe.Pointer(ds))
+	//C.free(unsafe.Pointer(ds))
 
 	return ds
 }
