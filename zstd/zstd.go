@@ -118,12 +118,12 @@ func Decompress(ptr unsafe.Pointer, size C.int) *C.char {
 
 	ddata, err := gozstd.Decompress(nil, dst)
 	if err != nil {
-		log.Printf("zstd.Decompress(nil, %+v): %+v", dst, err)
+		log.Printf("zstd.Decompress(nil, %+v): %+v", base64.StdEncoding.EncodeToString(dst), err)
 
 		return C.CString("")
 	}
 	if debug {
-		log.Printf("[DEBUG] zstd.Decompress(nil, %+v): data=%s, size=%d", dst, ddata, len(ddata))
+		log.Printf("[DEBUG] zstd.Decompress(nil, %+v): data=%s, size=%d", base64.StdEncoding.EncodeToString(dst), ddata, len(ddata))
 	}
 
 	ds := C.CString(string(ddata))
@@ -169,27 +169,27 @@ func DecompressWithDict(ptr unsafe.Pointer, size C.int, dict string) *C.char {
 
 	value, ok := ddictStore.Load(dict)
 	if !ok {
-		log.Printf("zstd.DecompressDict(%s, %s): missing dict, please init first.", dst, dict)
+		log.Printf("zstd.DecompressDict(%s, %s): missing dict, please init first.", base64.StdEncoding.EncodeToString(dst), dict)
 
 		return C.CString("")
 	}
 
 	ddict, ok := value.(*gozstd.DDict)
 	if !ok {
-		log.Printf("zstd.DecompressDict(%s, %s): invalid dict.", dst, dict)
+		log.Printf("zstd.DecompressDict(%s, %s): invalid dict.", base64.StdEncoding.EncodeToString(dst), dict)
 
 		return C.CString("")
 	}
 
 	data, err := gozstd.DecompressDict(nil, dst, ddict)
 	if err != nil {
-		log.Printf("zstd.DecompressDict(nil, %s, %s): %+v", dst, dict, err)
+		log.Printf("zstd.DecompressDict(nil, %s, %s): %+v", base64.StdEncoding.EncodeToString(dst), dict, err)
 
 		return C.CString("")
 	}
 
 	if debug {
-		log.Printf("[DEBUG] zstd.DecompressDict(nil, %+v, %s): data=%s, size=%d", dst, dict, data, len(data))
+		log.Printf("[DEBUG] zstd.DecompressDict(nil, %s, %s): data=%s, size=%d", base64.StdEncoding.EncodeToString(dst), dict, data, len(data))
 	}
 
 	ds := C.CString(string(data))
