@@ -15,5 +15,6 @@ goenv:
 c-share:
 	go build -o zstd/libzstd.so -buildmode=c-shared zstd/zstd.go
 
+
 test-lua:
 	luajit luajit/zstd.lua

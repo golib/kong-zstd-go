@@ -27,54 +27,69 @@ typedef void *GoChan;
 typedef struct { void *t; void *v; } GoInterface;
 typedef struct { void *data; GoInt len; GoInt cap; } GoSlice;
 
-extern void InitDict(GoString filename, GoInt compressionLevel);
+/* Return type for Compress */
+struct GoCompressResult {
+	char* data;
+	GoInt size;
+};
+
+extern void EnableDebug();
+extern void DisableDebug();
+extern void AddDict(GoString name, GoString filename);
 extern void ReleaseDict();
-extern char* Base64Compress(GoString cs);
-extern char* Base64Decompress(GoString ds);
-extern char* Base64CompressWithDict(GoString cs);
-extern char* Base64DecompressWithDict(GoString ds);
+extern struct GoCompressResult Compress(GoString src);
+extern char* Decompress(GoSlice dst);
+extern struct GoCompressResult CompressWithDict(GoString src, GoString dict);
+extern char* DecompressWithDict(GoSlice dst, GoString dict);
+
 ]])
 
 -- define go types
 local goStringType = ffi.metatype("GoString", {})
+local goSliceType = ffi.metatype("GoSlice", {})
 
 -- init dict
+local name = "testing"
 local filename = "luajit/zstd.dict"
+
+local dictName = goStringType(name, #name)
 local dictFilename = goStringType(filename, #filename)
 
-zstd.InitDict(dictFilename, 3)
-
+zstd.EnableDebug()
+zstd.AddDict(dictName, dictFilename)
 
 -- compress/decompress without dict
 local actual = "Hello, world! This is a golang zstd binding for c with luajit."
-local expected = "KLUv/SA+8QEASGVsbG8sIHdvcmxkISBUaGlzIGlzIGEgZ29sYW5nIHpzdGQgYmluZGluZyBmb3IgYyB3aXRoIGx1YWppdC4="
 
 local compressInput = goStringType(actual, #actual)
-local compressOutput = zstd.Base64Compress(compressInput)
 
-io.write(string.format("Compressed without dict => %s\n", ffi.string(compressOutput)))
-assert(ffi.string(compressOutput) == expected)
+local compressOutput = zstd.Compress(compressInput)
+io.write(string.format("Compressed without dict => type=%s, size=%d\n", ffi.typeof(compressOutput), ffi.sizeof(compressOutput)))
 
-local data = ffi.string(compressOutput)
-local decompressInput = goStringType(data, #data)
-local decompressOutput = zstd.Base64Decompress(decompressInput)
+local compressResult = ffi.new("struct GoCompressResult", compressOutput)
+io.write(string.format("Compressed without dict => type=%s, size=%d\n", ffi.typeof(compressResult), ffi.sizeof(compressResult)))
+io.write(string.format("Compressed without dict => data=%s, size=%d\n", ffi.typeof(compressResult.data), tonumber(compressResult.size)))
+
+local decompressInput = goSliceType(compressResult.data, compressResult.size, compressResult.size)
+local decompressOutput = zstd.Decompress(decompressInput)
 
 io.write(string.format("Decompressed without dict => %s\n", ffi.string(decompressOutput)))
 assert(ffi.string(decompressOutput) == actual)
 
 -- compress/decompress with dict
 local actualDict = "Hello, world! This is a golang zstd binding for c with luajit."
-local expectedDict = "KLUv/SN7BtpvPvEBAEhlbGxvLCB3b3JsZCEgVGhpcyBpcyBhIGdvbGFuZyB6c3RkIGJpbmRpbmcgZm9yIGMgd2l0aCBsdWFqaXQu"
 
 local compressDictInput = goStringType(actualDict, #actualDict)
-local compressDictOutput = zstd.Base64CompressWithDict(compressDictInput)
 
-io.write(string.format("Compressed with dict => %s\n", ffi.string(compressDictOutput)))
-assert(ffi.string(compressDictOutput) == expectedDict)
+local compressDictOutput = zstd.CompressWithDict(compressDictInput, dictName)
+io.write(string.format("Compressed with dict => type=%s, size=%d\n", ffi.typeof(compressDictOutput), ffi.sizeof(compressDictOutput)))
 
-local dataDict = ffi.string(compressDictOutput)
-local decompressDictInput = goStringType(dataDict, #dataDict)
-local decompressDictOutput = zstd.Base64DecompressWithDict(decompressDictInput)
+local compressDictResult = ffi.new("struct GoCompressResult", compressDictOutput)
+io.write(string.format("Compressed with dict => type=%s, size=%d\n", ffi.typeof(compressDictResult), ffi.sizeof(compressDictResult)))
+io.write(string.format("Compressed with dict => data=%s, size=%d\n", ffi.typeof(compressDictResult.data), tonumber(compressDictResult.size)))
+
+local decompressDictInput = goSliceType(compressDictResult.data, compressDictResult.size, compressDictResult.size)
+local decompressDictOutput = zstd.DecompressWithDict(decompressDictInput, dictName)
 
 io.write(string.format("Decompressed with dict => %s\n", ffi.string(decompressDictOutput)))
 assert(ffi.string(decompressDictOutput) == actualDict)
