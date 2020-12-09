@@ -1,5 +1,5 @@
 local ffi = require("ffi")
-local zstd = ffi.load("zstd/libzstd.so")
+local zstd = ffi.load("lib/libzstd-drawin-amd64.so")
 
 ffi.cdef([[
 typedef struct { const char *p; ptrdiff_t n; } _GoString_;
