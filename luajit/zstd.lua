@@ -1,5 +1,5 @@
 local ffi = require("ffi")
-local zstd = ffi.load("lib/libzstd-drawin-amd64.so")
+local zstd = ffi.load("lib/libzstd-darwin_amd64.so")
 
 ffi.cdef([[
 typedef struct { const char *p; ptrdiff_t n; } _GoString_;
@@ -29,7 +29,7 @@ typedef struct { void *data; GoInt len; GoInt cap; } GoSlice;
 
 /* Return type for Compress */
 struct GoCompressResult {
-	char* data;
+	void* data;
 	GoInt size;
 };
 
@@ -38,9 +38,9 @@ extern void DisableDebug();
 extern void AddDict(GoString name, GoString filename);
 extern void ReleaseDict();
 extern struct GoCompressResult Compress(GoString src);
-extern char* Decompress(GoSlice dst);
+extern char* Decompress(void* ptr, int size);
 extern struct GoCompressResult CompressWithDict(GoString src, GoString dict);
-extern char* DecompressWithDict(GoSlice dst, GoString dict);
+extern char* DecompressWithDict(void* ptr, int size, GoString dict);
 
 ]])
 
@@ -70,8 +70,7 @@ local compressResult = ffi.new("struct GoCompressResult", compressOutput)
 io.write(string.format("Compressed without dict => type=%s, size=%d\n", ffi.typeof(compressResult), ffi.sizeof(compressResult)))
 io.write(string.format("Compressed without dict => data=%s, size=%d\n", ffi.typeof(compressResult.data), tonumber(compressResult.size)))
 
-local decompressInput = goSliceType(compressResult.data, compressResult.size, compressResult.size)
-local decompressOutput = zstd.Decompress(decompressInput)
+local decompressOutput = zstd.Decompress(compressResult.data, compressResult.size)
 
 io.write(string.format("Decompressed without dict => %s\n", ffi.string(decompressOutput)))
 assert(ffi.string(decompressOutput) == actual)
@@ -88,8 +87,7 @@ local compressDictResult = ffi.new("struct GoCompressResult", compressDictOutput
 io.write(string.format("Compressed with dict => type=%s, size=%d\n", ffi.typeof(compressDictResult), ffi.sizeof(compressDictResult)))
 io.write(string.format("Compressed with dict => data=%s, size=%d\n", ffi.typeof(compressDictResult.data), tonumber(compressDictResult.size)))
 
-local decompressDictInput = goSliceType(compressDictResult.data, compressDictResult.size, compressDictResult.size)
-local decompressDictOutput = zstd.DecompressWithDict(decompressDictInput, dictName)
+local decompressDictOutput = zstd.DecompressWithDict(compressDictResult.data, compressDictResult.size, dictName)
 
 io.write(string.format("Decompressed with dict => %s\n", ffi.string(decompressDictOutput)))
 assert(ffi.string(decompressDictOutput) == actualDict)
